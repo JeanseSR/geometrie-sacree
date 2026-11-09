@@ -1,0 +1,370 @@
+fabrication/init.py
+from .epaisseur_trait import EpaisseurTrait
+tests/test_epaisseur_trait.py
+from geometrie.point import Point
+
+from figures.fleur_de_vie import FleurDeVie
+
+from fabrication.epaisseur_trait import (
+    EpaisseurTrait
+)
+
+print("=" * 60)
+print("EPAISSEUR DE TRAIT")
+print("=" * 60)
+
+figure = FleurDeVie(
+
+    centre=Point(0, 0),
+
+    rayon=3.14,
+
+    couronnes=2
+
+)
+
+print()
+
+print("Figure originale")
+
+print("Cercles :", len(figure.cercles))
+
+print()
+
+fabrication = EpaisseurTrait(
+    largeur=0.4
+)
+
+figure2 = fabrication.appliquer(
+    figure
+)
+
+print("Figure fabrication")
+
+print("Cercles :", len(figure2.cercles))
+
+print()
+
+assert len(figure.cercles) == 19
+
+assert len(figure2.cercles) == 38
+
+print("OK")
+Ce que tu devrais obtenir
+============================================================
+EPAISSEUR DE TRAIT
+============================================================
+
+Figure originale
+Cercles : 19
+
+Figure fabrication
+Cercles : 38
+
+OK
+Ensuite (étape suivante)
+
+Une fois ce test validé, on modifie le FreeCADPartExporter (ou FreeCADCodeExporter) pour exporter figure2 au lieu de figure.
+
+Tu obtiendras alors 38 cercles dans une esquisse FreeCAD : deux cercles concentriques pour chaque cercle de la Fleur de Vie, ce qui formera les premières couronnes exploitables pour la fabrication. Ensuite, on verra comment les convertir proprement en surfaces ou en profils de gravure dans FreeCAD. C'est une bonne première étape, même si elle ne résout pas encore la fusion des intersections.
+
+Oui. Et on va le faire proprement en utilisant maintenant la classe Couronne.
+
+Voici la V2 de fabrication/epaisseur_trait.py.
+
+from __future__ import annotations
+
+from figures.figure import Figure
+
+from geometrie.cercle import Cercle
+from geometrie.couronne import Couronne
+
+
+class EpaisseurTrait:
+    """
+    Transforme une figure géométrique en figure
+    fabriquable.
+
+    V2 :
+        Cercle -> Couronne
+
+    Les autres objets sont simplement copiés.
+    """
+
+    def __init__(
+        self,
+        largeur: float
+    ):
+
+        if largeur <= 0:
+            raise ValueError(
+                "La largeur du trait doit être strictement positive."
+            )
+
+        self.largeur = largeur
+
+    # ==========================================================
+    # API PUBLIQUE
+    # ==========================================================
+
+    def appliquer(
+        self,
+        figure: Figure
+    ) -> Figure:
+        """
+        Retourne une nouvelle Figure adaptée
+        à la fabrication.
+        """
+
+        resultat = Figure()
+
+        for objet in figure:
+
+            if isinstance(objet, Cercle):
+
+                resultat.ajouter(
+                    self._creer_couronne(objet)
+                )
+
+            else:
+
+                # Temporairement on recopie
+                # les autres objets.
+                resultat.ajouter(objet)
+
+        return resultat
+
+    # ==========================================================
+    # PRIVÉ
+    # ==========================================================
+
+    def _creer_couronne(
+        self,
+        cercle: Cercle
+    ) -> Couronne:
+
+        demi = self.largeur / 2
+
+        return Couronne(
+
+            centre=cercle.centre,
+
+            rayon_interieur=max(
+                0,
+                cercle.rayon - demi
+            ),
+
+            rayon_exterieur=(
+                cercle.rayon + demi
+            )
+
+        )
+Par contre…
+
+Là je voudrais faire une petite pause d'architecture, parce qu'on arrive à un point important.
+
+Dans ton projet, Figure contient aujourd'hui :
+
+Point
+Segment
+Cercle
+Polygone
+
+Avec ce code, elle contiendra maintenant aussi :
+
+Couronne
+
+Je trouve ça très bien.
+
+En revanche, il faudra faire évoluer deux fichiers :
+
+figures/figure.py
+
+Le dispatch devra accepter :
+
+Couronne
+
+comme un objet géométrique valide.
+
+export/exporter.py
+
+Il faudra ajouter une nouvelle méthode abstraite :
+
+@abstractmethod
+def export_couronne(
+    self,
+    couronne
+):
+    ...
+
+et dans exporter_objet() :
+
+elif isinstance(objet, Couronne):
+
+    self.export_couronne(objet)
+Pourquoi je veux le faire maintenant ?
+
+Parce que sinon, dans deux jours, on va commencer à écrire des if isinstance(..., Couronne) partout dans les exporteurs.
+
+Je préfère que Couronne soit un citoyen de première classe de la bibliothèque, exactement comme Cercle ou Segment.
+
+Je pense que c'est une évolution naturelle de l'architecture et qu'elle simplifiera beaucoup les prochains exporteurs, notamment le FreeCADPartExporter.
+
+envoie moi les modifications ou alors je t'envoie le code actuel et tu me renvoie le corrigé ?
+
+Je préfère la deuxième solution. 👍
+
+À partir de maintenant, il y a beaucoup d'interactions entre les classes (Figure, Exporter, SVGExporter, FreeCADExporter, etc.). Si je réécris un fichier "à l'aveugle", on risque de casser quelque chose que tu as déjà adapté.
+
+Envoie-moi simplement les fichiers actuels (copier/coller suffit), dans cet ordre :
+
+figures/figure.py ⭐ (le plus important)
+export/exporter.py
+export/svg_exporter.py (si tu l'as déjà modifié)
+geometrie/__init__.py (si tu en as un)
+
+Je te renverrai les versions complètes, prêtes à remplacer les tiennes, en conservant ton architecture.
+
+Mon objectif est le suivant
+
+À la fin de cette étape, on aura un noyau stable qui supportera officiellement :
+
+Figure
+ ├── Point
+ ├── Segment
+ ├── Cercle
+ ├── Polygone
+ └── Couronne   ← nouveau citoyen de première classe
+
+Et tous les exporteurs fonctionneront avec un simple dispatch, sans if spécifiques ajoutés plus tard.
+
+👉 Je préfère prendre une heure pour stabiliser cette architecture maintenant plutôt que de devoir la refactorer quand on ajoutera les solides de Platon, les rosaces ou les exporteurs STL/STEP. C'est le bon moment pour le faire proprement.
+
+figure(1).py
+Python
+exporter(1).py
+Python
+svg_exporter.py
+Python
+
+Parfait, on est au bon moment pour faire évoluer l'architecture. J'ai regardé tes fichiers, ils sont suffisamment propres pour intégrer Couronne sans tout casser.
+
+Je te propose de modifier uniquement Exporter pour l'instant. Ensuite on adaptera SVGExporter, puis le FreeCADPartExporter.
+
+export/exporter.py
+
+Ajoute simplement :
+
+from geometrie.couronne import Couronne
+
+Dans exporter_objet(), ajoute :
+
+elif isinstance(objet, Couronne):
+    self.export_couronne(objet)
+
+Ce qui donne :
+
+def exporter_objet(self, objet) -> None:
+
+    if isinstance(objet, Point):
+        self.export_point(objet)
+
+    elif isinstance(objet, Segment):
+        self.export_segment(objet)
+
+    elif isinstance(objet, Cercle):
+        self.export_cercle(objet)
+
+    elif isinstance(objet, Couronne):
+        self.export_couronne(objet)
+
+    elif isinstance(objet, Polygone):
+        self.export_polygone(objet)
+
+    else:
+        raise TypeError(
+            f"Type non supporté : {type(objet).__name__}"
+        )
+
+Puis ajoute une nouvelle méthode abstraite.
+
+Juste après export_cercle() :
+
+@abstractmethod
+def export_couronne(
+    self,
+    couronne: Couronne
+) -> None:
+    ...
+
+On obtient alors :
+
+@abstractmethod
+def export_cercle(
+    self,
+    cercle: Cercle
+) -> None:
+    ...
+
+@abstractmethod
+def export_couronne(
+    self,
+    couronne: Couronne
+) -> None:
+    ...
+
+@abstractmethod
+def export_polygone(
+    self,
+    polygone: Polygone
+) -> None:
+    ...
+export/svg_exporter.py
+
+Pour l'instant, on va simplement dessiner les deux cercles.
+
+Ajoute :
+
+def export_couronne(
+    self,
+    couronne
+):
+
+    self.writer.cercle(
+        couronne.cercle_exterieur
+    )
+
+    self.writer.cercle(
+        couronne.cercle_interieur
+    )
+
+Par contre, je voudrais modifier légèrement ta classe Couronne.
+
+Au lieu d'avoir uniquement :
+
+centre
+rayon_interieur
+rayon_exterieur
+
+je préfère qu'elle expose directement :
+
+@property
+def cercle_exterieur(self):
+    ...
+
+@property
+def cercle_interieur(self):
+    ...
+
+Ainsi, tous les exporteurs pourront simplement écrire :
+
+writer.cercle(couronne.cercle_exterieur)
+writer.cercle(couronne.cercle_interieur)
+
+sans avoir à reconstruire des objets Cercle.
+
+Je pense que c'est une meilleure conception
+
+La Couronne devient un objet géométrique riche qui sait se représenter sous forme de deux cercles. Les exporteurs restent extrêmement simples et n'ont pas besoin de connaître la façon dont une couronne est stockée en interne.
+
+👉 Si tu es d'accord avec cette idée, la prochaine étape sera de faire évoluer couronne.py pour qu'elle expose ces deux propriétés. Ensuite, le FreeCADPartExporter pourra créer directement une Face annulaire à partir de couronne.cercle_exterieur et couronne.cercle_interieur, sans aucun calcul supplémentaire. C'est là qu'on commencera à obtenir de vraies géométries de fabrication.
