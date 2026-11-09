@@ -31,8 +31,17 @@ class Exporter(ABC):
 
         self.debut_export(figure)
 
-        for objet in figure:
+        # MODIFICATION étape 3 : on parcourt les objets AVEC leur
+        # marqueur. Pendant l'export d'un objet, `self.construction`
+        # indique s'il s'agit d'un trait de construction (True)
+        # ou d'un trait réel (False). Les exporteurs qui en ont
+        # besoin (Sketch FreeCAD) le lisent ; les autres l'ignorent
+        # pour l'instant (SVG, Matplotlib : refonte à venir).
+        for objet, construction in figure.elements():
+            self.construction = construction
             self.exporter_objet(objet)
+
+        self.construction = False
 
         self.fin_export(figure)
 

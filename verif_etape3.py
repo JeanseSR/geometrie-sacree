@@ -1,5 +1,5 @@
-"""Vérification étape 2 : non-régression après suppression des doublons et du code mort.
-Usage : python verif_etape2.py [dossier_bibliotheque]   (défaut : dossier courant)"""
+"""Vérification étape 3 : Point figé + marqueur de construction (+ non-régression étapes 1 et 2).
+Usage : python verif_etape3.py [dossier_bibliotheque]   (défaut : dossier courant)"""
 import sys, os, tempfile, traceback
 sys.path.insert(0, sys.argv[1] if len(sys.argv) > 1 else ".")
 import matplotlib; matplotlib.use("Agg")   # pas de fenêtre
@@ -74,4 +74,85 @@ for f in ("geometrie/reseau_hexagonal.py", "geometrie/tranformation.py", "export
           "export/dxf_exporter.py", "export/pdf_exporter.py", "export/png_exporter.py", "export/styles.py",
           "tests/test_reseau_hexagonal.py"):
     essai(f"supprimé : {f}", lambda f=f: verifie(not os.path.exists(os.path.join(racine, f)), "encore présent"))
+
+# =====================================================================
+# ÉTAPE 3
+# =====================================================================
+import dataclasses
+from geometrie.segment import Segment
+from fabrication.epaisseur_trait import EpaisseurTrait
+
+# --- Point figé ---
+def modifier_point():
+    p = Point(1, 2)
+    try:
+        p.x = 5
+    except dataclasses.FrozenInstanceError:
+        return True
+    raise AssertionError("Point encore modifiable")
+essai("Point non modifiable", modifier_point)
+essai("Point hachable (set dédoublonne)", lambda: verifie(len({Point(1, 2), Point(1, 2), Point(3, 4)}) == 2, "set"))
+essai("Cercle hachable", lambda: verifie(len({Cercle(Point(0, 0), 5), Cercle(Point(0, 0), 5)}) == 1, "set cercle"))
+
+# --- Valeurs par défaut ---
+def defauts():
+    f = Figure()
+    f.ajouter(Point(0, 0)); f.ajouter(seg); f.ajouter(Cercle(Point(0, 0), 3))
+    verifie(list(f.construction) == [True, False, False], f"obtenu {f.construction}")
+    return f.construction
+essai("Défaut : Point=construction, reste=réel", defauts)
+
+# --- Métatron ---
+m = CubeMetatron(Point(0, 0), 10)
+essai("Métatron : 78 traits réels (segments)", lambda: verifie(len(m.objets_reels) == 78 and all(isinstance(o, Segment) for o in m.objets_reels), f"{len(m.objets_reels)}"))
+essai("Métatron : 26 de construction (13 cercles + 13 points)", lambda: verifie(len(m.objets_construction) == 26, f"{len(m.objets_construction)}"))
+essai("Fleur : 19 cercles réels", lambda: verifie(len(fleur.objets_reels) == 19, "fleur"))
+
+# --- Transformations : marqueur conservé ---
+for nom, fn in [("translation", lambda: m.translation(5, 5)), ("rotation", lambda: m.rotation(30)),
+                ("rotation_autour", lambda: m.rotation_autour(Point(1, 1), 30)), ("echelle", lambda: m.echelle(2)),
+                ("echelle_autour", lambda: m.echelle_autour(Point(1, 1), 2)), ("mise_a_echelle", lambda: m.mise_a_echelle(2)),
+                ("copier", lambda: m.copier())]:
+    essai(f"{nom} garde le marqueur", lambda fn=fn: verifie(fn().construction == m.construction, "marqueur perdu"))
+
+# --- Association de figures ---
+def association():
+    f = Figure(nom="Association")
+    f.ajouter_figure(fleur); f.ajouter_figure(m)
+    verifie(len(f) == len(fleur) + len(m), "taille")
+    verifie(len(f.objets_reels) == 19 + 78, f"réels {len(f.objets_reels)}")
+    return f
+essai("ajouter_figure (Fleur + Métatron)", association)
+
+# --- supprimer garde les listes alignées ---
+def suppression():
+    f = Figure(); a = Point(0, 0)
+    f.ajouter(a); f.ajouter(seg)
+    f.supprimer(a)
+    verifie(f.objets == [seg] and f.construction == [False], "désalignement")
+    return True
+essai("supprimer garde l'alignement", suppression)
+essai("Figure(objets=[...]) complète le marqueur", lambda: verifie(Figure(objets=[Point(0, 0), seg]).construction == [True, False], "post_init"))
+
+# --- Épaisseur de trait : construction non épaissie ---
+def epaisseur():
+    e = EpaisseurTrait(largeur=0.5).appliquer(m)
+    verifie(len(e.bandes_segments) == 78, f"bandes {len(e.bandes_segments)}")
+    verifie(len(e.couronnes_geometriques) == 0, f"couronnes {len(e.couronnes_geometriques)}")
+    verifie(len(e.objets_construction) == 26, "construction")
+    return "78 bandes, 0 couronne"
+essai("EpaisseurTrait ignore la construction", epaisseur)
+
+# --- Export Sketch FreeCAD ---
+def sketch():
+    chemin = os.path.join(tmp, "metatron.py")
+    exp = FreeCADCodeExporter()
+    exp.export(m, chemin); taille1 = len(open(chemin, encoding="utf-8").read())
+    exp.export(m, chemin); txt = open(chemin, encoding="utf-8").read()
+    verifie(len(txt) == taille1, "le 2e export a doublé le script")
+    vrais = txt.count("\n    True\n"); faux = txt.count("\n    False\n")
+    verifie(vrais == 13 and faux == 78, f"True={vrais} False={faux}")
+    compile(txt, chemin, "exec")   # le script généré est du Python valide
+    return "13 cercles construction, 78 segments réels"
+essai("Sketch FreeCAD : marqueur + export répétable", sketch)
 print(f"\n{ok} OK / {ko} KO")

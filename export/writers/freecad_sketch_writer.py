@@ -47,7 +47,9 @@ class FreeCADSketchWriter:
     # SEGMENT
     # ==========================================================
 
-    def segment(self, segment):
+    # MODIFICATION étape 3 : paramètre `construction`
+    # (True -> trait bleu pointillé dans FreeCAD, ignoré par Pad/Pocket)
+    def segment(self, segment, construction: bool = False):
 
         self.lines.extend([
 
@@ -61,7 +63,8 @@ class FreeCADSketchWriter:
 
             "    ),",
 
-            "    False",
+            # MODIFICATION étape 3 : False écrit en dur -> marqueur
+            f"    {construction}",
 
             ")",
 
@@ -73,7 +76,9 @@ class FreeCADSketchWriter:
     # CERCLE
     # ==========================================================
 
-    def cercle(self, cercle):
+    # MODIFICATION étape 3 : paramètre `construction`
+    # (True -> trait bleu pointillé dans FreeCAD, ignoré par Pad/Pocket)
+    def cercle(self, cercle, construction: bool = False):
 
         self.lines.extend([
 
@@ -89,7 +94,8 @@ class FreeCADSketchWriter:
 
             "    ),",
 
-            "    False",
+            # MODIFICATION étape 3 : False écrit en dur -> marqueur
+            f"    {construction}",
 
             ")",
 
@@ -101,7 +107,9 @@ class FreeCADSketchWriter:
     # POLYGONE
     # ==========================================================
 
-    def polygone(self, polygone):
+    # MODIFICATION étape 3 : paramètre `construction`
+    # (True -> trait bleu pointillé dans FreeCAD, ignoré par Pad/Pocket)
+    def polygone(self, polygone, construction: bool = False):
 
         # CORRECTION étape 1 : `points` -> `sommets`
         pts = polygone.sommets
@@ -123,7 +131,8 @@ class FreeCADSketchWriter:
 
                 "    ),",
 
-                "    False",
+                # MODIFICATION étape 3 : False écrit en dur -> marqueur
+                f"    {construction}",
 
                 ")",
 
@@ -135,14 +144,19 @@ class FreeCADSketchWriter:
     # COURONNE
     # ==========================================================
 
-    def couronne(self, couronne):
+    # MODIFICATION étape 3 : paramètre `construction`
+    # (True -> trait bleu pointillé dans FreeCAD, ignoré par Pad/Pocket)
+    def couronne(self, couronne, construction: bool = False):
 
+        # MODIFICATION étape 3 : marqueur transmis aux deux cercles
         self.cercle(
-            couronne.cercle_exterieur
+            couronne.cercle_exterieur,
+            construction
         )
 
         self.cercle(
-            couronne.cercle_interieur
+            couronne.cercle_interieur,
+            construction
         )
 
     # ==========================================================

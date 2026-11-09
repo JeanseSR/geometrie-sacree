@@ -5,16 +5,28 @@ import math
 from .boite_englobante import BoiteEnglobante
 from .vecteur import Vecteur
 
-@dataclass
+# CORRECTION étape 3 : Point devient figé (frozen=True).
+#
+# Avant : @dataclass + __init__ écrit à la main.
+#   -> le point était modifiable (p.x = 5 possible)
+#   -> et NON hachable : impossible de le mettre dans un set
+#      ou de l'utiliser comme clé de dict (dataclass avec eq=True
+#      et sans frozen met __hash__ à None).
+#
+# Après : frozen=True génère automatiquement
+#   __init__(x, y), __eq__ et __hash__,
+# et interdit toute modification (FrozenInstanceError).
+# Toutes les transformations (translation, rotation...)
+# renvoyaient déjà un NOUVEAU Point : rien ne change pour elles.
+#
+# Utilité : dédupliquer des points / segments avec un set
+# (traits superposés du Métatron, à éviter au laser).
+@dataclass(frozen=True)
 class Point:
-    """Représente un point du plan."""
+    """Représente un point du plan (immuable)."""
 
     x: float
     y: float
-
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
 
     @property
     def boite_englobante(self):

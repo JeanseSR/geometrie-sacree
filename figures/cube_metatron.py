@@ -78,8 +78,13 @@ class CubeMetatron(Figure):
         # Conservation des cercles
         #
 
+        # MODIFICATION étape 3 : les 13 cercles du Fruit de Vie
+        # servent à placer les centres, mais ne font pas partie
+        # du Métatron fabriqué -> traits de construction.
+        # (les 13 points ajoutés plus bas sont déjà des traits
+        #  de construction par défaut ; les 78 segments sont réels)
         for cercle in self.fruit.cercles:
-            self.ajouter_cercle(cercle)
+            self.ajouter_cercle(cercle, construction=True)
 
         #
         # Centres des cercles

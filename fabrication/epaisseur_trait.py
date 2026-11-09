@@ -105,9 +105,19 @@ class EpaisseurTrait:
             parametres=dict(figure.parametres)
         )
 
-        for objet in figure:
+        # MODIFICATION étape 3 : parcours avec le marqueur de construction.
+        for objet, construction in figure.elements():
 
-            if isinstance(objet, Cercle):
+            # AJOUT étape 3 : un trait de construction n'est jamais
+            # fabriqué -> on ne l'épaissit pas, on le recopie tel quel
+            # (toujours marqué construction).
+            # Sans ça, les 13 cercles du Métatron deviendraient des
+            # couronnes et seraient imprimées / gravées.
+            if construction:
+
+                resultat.ajouter(objet, construction=True)
+
+            elif isinstance(objet, Cercle):
 
                 resultat.ajouter(
                     self._creer_couronne(objet)

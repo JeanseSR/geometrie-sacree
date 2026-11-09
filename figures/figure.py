@@ -43,23 +43,102 @@ class Figure:
         default_factory=list
     )
 
+    # AJOUT étape 3 : marqueur "trait de construction" (trait d'aide).
+    #
+    # construction[i] correspond à objets[i] :
+    #   False -> trait RÉEL : il sera fabriqué (imprimé, gravé,
+    #            découpé, mis en relief, évidé en pochoir...)
+    #   True  -> trait de CONSTRUCTION : il sert à bâtir la figure
+    #            (ex. les 13 cercles du Métatron) mais n'est
+    #            jamais fabriqué.
+    #
+    # Le nom reprend le vocabulaire FreeCAD :
+    #   sketch.addGeometry(geometrie, construction)
+    #
+    # Pourquoi dans Figure et pas dans Segment / Cercle... ?
+    # -> la géométrie reste pure (un segment ne sait pas comment
+    #    il sera fabriqué) et le marqueur est géré à UN seul endroit.
+    construction: list[bool] = field(
+        default_factory=list
+    )
+
+    def __post_init__(self) -> None:
+        # AJOUT étape 3 : si une Figure est créée avec
+        # objets=[...] déjà remplis, on complète `construction`
+        # avec la valeur par défaut de chaque objet, pour que
+        # les deux listes aient toujours la même longueur.
+        while len(self.construction) < len(self.objets):
+            objet = self.objets[len(self.construction)]
+            self.construction.append(
+                self._construction_par_defaut(objet)
+            )
+
     # ==========================================================
     # AJOUT
     # ==========================================================
 
+    @staticmethod
+    def _construction_par_defaut(
+        objet: ObjetGeometrique
+    ) -> bool:
+        """
+        AJOUT étape 3 : valeur utilisée quand on ne précise rien.
+
+        Un Point n'a pas de matière (pas de longueur ni de surface) :
+        il est toujours un repère de construction.
+        Tout le reste est un trait réel par défaut.
+        """
+        return isinstance(objet, Point)
+
     def ajouter(
         self,
-        objet: ObjetGeometrique
+        objet: ObjetGeometrique,
+        construction: bool | None = None
     ) -> None:
-        """Ajoute un objet à la figure."""
+        """
+        Ajoute un objet à la figure.
+
+        construction :
+            None  -> valeur par défaut (Point = construction,
+                     le reste = trait réel)
+            True  -> trait de construction (jamais fabriqué)
+            False -> trait réel (fabriqué)
+        """
+        # MODIFICATION étape 3 : ajout du paramètre `construction`
+        # (optionnel : tout le code existant reste valable).
+        if construction is None:
+            construction = self._construction_par_defaut(objet)
+
         self.objets.append(objet)
+        self.construction.append(construction)
 
     def ajouter_plusieurs(
         self,
-        *objets: ObjetGeometrique
+        *objets: ObjetGeometrique,
+        construction: bool | None = None
     ) -> None:
-        """Ajoute plusieurs objets."""
-        self.objets.extend(objets)
+        """Ajoute plusieurs objets (même marqueur pour tous)."""
+        # MODIFICATION étape 3 : passe par ajouter() pour que
+        # `construction` reste aligné sur `objets`.
+        for objet in objets:
+            self.ajouter(objet, construction)
+
+    # AJOUT étape 3 : association de figures.
+    def ajouter_figure(
+        self,
+        autre: "Figure"
+    ) -> None:
+        """
+        Ajoute tous les objets d'une autre figure,
+        en conservant leur marqueur de construction.
+
+        Base des futures associations de figures
+        (ex. Fleur de Vie + Métatron sur la même plaque).
+        Les métadonnées (nom, paramètres...) de `autre`
+        ne sont pas reprises : seule la géométrie l'est.
+        """
+        for objet, construction in autre.elements():
+            self.ajouter(objet, construction)
 
     # ==========================================================
     # SUPPRESSION
@@ -70,11 +149,49 @@ class Figure:
         objet: ObjetGeometrique
     ) -> None:
 
-        self.objets.remove(objet)
+        # MODIFICATION étape 3 : on supprime aussi le marqueur
+        # correspondant (même position) pour garder les listes alignées.
+        index = self.objets.index(objet)
+
+        del self.objets[index]
+        del self.construction[index]
 
     def vider(self) -> None:
 
         self.objets.clear()
+        # AJOUT étape 3
+        self.construction.clear()
+
+    # ==========================================================
+    # PARCOURS AVEC MARQUEUR (AJOUT étape 3)
+    # ==========================================================
+
+    def elements(
+        self
+    ) -> Iterator[tuple[ObjetGeometrique, bool]]:
+        """
+        Parcourt les objets avec leur marqueur :
+
+            for objet, construction in figure.elements():
+                ...
+        """
+        return zip(self.objets, self.construction)
+
+    @property
+    def objets_reels(self) -> list[ObjetGeometrique]:
+        """Objets à fabriquer (construction = False)."""
+        return [
+            o for o, c in self.elements()
+            if not c
+        ]
+
+    @property
+    def objets_construction(self) -> list[ObjetGeometrique]:
+        """Objets de construction (jamais fabriqués)."""
+        return [
+            o for o, c in self.elements()
+            if c
+        ]
 
     # ==========================================================
     # FILTRES
@@ -223,9 +340,11 @@ class Figure:
         # CORRECTION étape 1 : Figure() -> self._copie_vide()
         nouvelle = self._copie_vide()
 
-        for objet in self.objets:
+        # MODIFICATION étape 3 : on parcourt aussi le marqueur de construction
+        for objet, construction in self.elements():
             nouvelle.ajouter(
-                objet.translation(dx, dy)
+                objet.translation(dx, dy),
+                construction  # MODIFICATION étape 3 : marqueur conservé
             )
 
         return nouvelle
@@ -238,9 +357,11 @@ class Figure:
         # CORRECTION étape 1 : Figure() -> self._copie_vide()
         nouvelle = self._copie_vide()
 
-        for objet in self.objets:
+        # MODIFICATION étape 3 : on parcourt aussi le marqueur de construction
+        for objet, construction in self.elements():
             nouvelle.ajouter(
-                objet.rotation(angle)
+                objet.rotation(angle),
+                construction  # MODIFICATION étape 3 : marqueur conservé
             )
 
         return nouvelle
@@ -254,12 +375,14 @@ class Figure:
         # CORRECTION étape 1 : Figure() -> self._copie_vide()
         nouvelle = self._copie_vide()
 
-        for objet in self.objets:
+        # MODIFICATION étape 3 : on parcourt aussi le marqueur de construction
+        for objet, construction in self.elements():
             nouvelle.ajouter(
                 objet.rotation_autour(
                     centre,
                     angle
-                )
+                ),
+                construction  # MODIFICATION étape 3 : marqueur conservé
             )
 
         return nouvelle
@@ -285,7 +408,8 @@ class Figure:
         # CORRECTION étape 1 : bloc de 7 lignes -> self._copie_vide()
         nouvelle = self._copie_vide()
 
-        for objet in self.objets:
+        # MODIFICATION étape 3 : on parcourt aussi le marqueur de construction
+        for objet, construction in self.elements():
 
             # CORRECTION étape 1 : `objet.mise_a_echelle(facteur, centre)`
             # n'existe que sur Segment et BandeSegment
@@ -297,7 +421,8 @@ class Figure:
                 objet.echelle_autour(
                     centre,
                     facteur
-                )
+                ),
+                construction  # MODIFICATION étape 3 : marqueur conservé
             )
 
         return nouvelle
@@ -320,9 +445,11 @@ class Figure:
         # CORRECTION étape 1 : bloc de 7 lignes -> self._copie_vide()
         nouvelle = self._copie_vide()
 
-        for objet in self.objets:
+        # MODIFICATION étape 3 : on parcourt aussi le marqueur de construction
+        for objet, construction in self.elements():
             nouvelle.ajouter(
-                objet.echelle(facteur)
+                objet.echelle(facteur),
+                construction  # MODIFICATION étape 3 : marqueur conservé
             )
 
         return nouvelle
@@ -345,12 +472,14 @@ class Figure:
         # CORRECTION étape 1 : bloc de 7 lignes -> self._copie_vide()
         nouvelle = self._copie_vide()
 
-        for objet in self.objets:
+        # MODIFICATION étape 3 : on parcourt aussi le marqueur de construction
+        for objet, construction in self.elements():
             nouvelle.ajouter(
                 objet.echelle_autour(
                     centre,
                     facteur
-                )
+                ),
+                construction  # MODIFICATION étape 3 : marqueur conservé
             )
 
         return nouvelle
@@ -389,7 +518,9 @@ class Figure:
             # Couronne s'appelle `couronnes_geometriques`.
             f"{len(self.couronnes_geometriques)} couronne(s), "
             # AJOUT étape 1 : les bandes de segments n'étaient pas comptées.
-            f"{len(self.bandes_segments)} bande(s)"
+            f"{len(self.bandes_segments)} bande(s), "
+            # AJOUT étape 3 : nombre d'objets de construction
+            f"dont {len(self.objets_construction)} de construction"
             ")"
         )
 
@@ -399,38 +530,43 @@ class Figure:
 
     def ajouter_point(
         self,
-        point: Point
+        point: Point,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter(point)
+        self.ajouter(point, construction)
 
     def ajouter_segment(
         self,
-        segment: Segment
+        segment: Segment,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter(segment)
+        self.ajouter(segment, construction)
 
     def ajouter_cercle(
         self,
-        cercle: Cercle
+        cercle: Cercle,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter(cercle)
+        self.ajouter(cercle, construction)
 
     def ajouter_polygone(
         self,
-        polygone: Polygone
+        polygone: Polygone,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter(polygone)
+        self.ajouter(polygone, construction)
 
     def ajouter_couronne(
         self,
-        couronne: Couronne
+        couronne: Couronne,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter(couronne)
+        self.ajouter(couronne, construction)
 
     # ==========================================================
     # AJOUTS MULTIPLES
@@ -438,38 +574,43 @@ class Figure:
 
     def ajouter_points(
         self,
-        *points: Point
+        *points: Point,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter_plusieurs(*points)
+        self.ajouter_plusieurs(*points, construction=construction)
 
     def ajouter_segments(
         self,
-        *segments: Segment
+        *segments: Segment,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter_plusieurs(*segments)
+        self.ajouter_plusieurs(*segments, construction=construction)
 
     def ajouter_cercles(
         self,
-        *cercles: Cercle
+        *cercles: Cercle,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter_plusieurs(*cercles)
+        self.ajouter_plusieurs(*cercles, construction=construction)
 
     def ajouter_polygones(
         self,
-        *polygones: Polygone
+        *polygones: Polygone,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter_plusieurs(*polygones)
+        self.ajouter_plusieurs(*polygones, construction=construction)
 
     def ajouter_couronnes(
         self,
-        *couronnes: Couronne
+        *couronnes: Couronne,
+        construction: bool | None = None  # AJOUT étape 3
     ) -> None:
 
-        self.ajouter_plusieurs(*couronnes)
+        self.ajouter_plusieurs(*couronnes, construction=construction)
 
     # ==========================================================
     # COPIE
@@ -480,8 +621,9 @@ class Figure:
         # CORRECTION étape 1 : bloc de 7 lignes -> self._copie_vide()
         nouvelle = self._copie_vide()
 
-        nouvelle.ajouter_plusieurs(
-            *self.objets
-        )
+        # MODIFICATION étape 3 : ajouter_figure recopie les objets
+        # AVEC leur marqueur de construction (ajouter_plusieurs
+        # les aurait tous remis à la valeur par défaut).
+        nouvelle.ajouter_figure(self)
 
         return nouvelle
