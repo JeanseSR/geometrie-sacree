@@ -57,13 +57,6 @@ class Segment:
     def angle(self):
         return self.vecteur.angle
 
-    def translation(self, dx: float, dy: float):
-
-        return Segment(
-            self.debut.translation(dx, dy),
-            self.fin.translation(dx, dy)
-        )
-
     def rotation(self, angle: float):
 
         return Segment(
@@ -78,25 +71,6 @@ class Segment:
             self.debut.rotation_autour(centre, angle),
             self.fin.rotation_autour(centre, angle)
         )
-
-    def echelle( self, facteur: float ) -> "Segment": 
-        """ Homothétie par rapport à l'origine. """ 
-        if facteur <= 0: 
-            raise ValueError( "Le facteur d'échelle doit être positif." ) 
-        return Segment( 
-            self.debut.echelle(facteur), 
-            self.fin.echelle(facteur) 
-        ) 
-        
-        
-    def echelle_autour( self, centre: Point, facteur: float ) -> "Segment": 
-        """ Homothétie par rapport à un point. """ 
-        if facteur <= 0: raise ValueError( "Le facteur d'échelle doit être positif." )
-        return Segment( 
-            self.debut.echelle_autour( centre, facteur ), 
-            self.fin.echelle_autour( centre, facteur ) 
-        )
-
 
     def echelle(
         self,
@@ -140,19 +114,4 @@ class Segment:
                 centre,
                 facteur
             )
-        )
-
-
-    def mise_a_echelle(
-        self,
-        facteur: float,
-        centre: Point = Point(0, 0)
-    ) -> "Segment":
-        """
-        Alias cohérent avec l'API de la bibliothèque.
-        """
-
-        return self.echelle_autour(
-            centre,
-            facteur
         )

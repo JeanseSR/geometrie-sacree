@@ -170,14 +170,3 @@ class BandeSegment:
             ),
             self.largeur * facteur
         )
-
-    def mise_a_echelle(
-        self,
-        facteur: float,
-        centre: Point = Point(0, 0)
-    ) -> "BandeSegment":
-
-        return self.echelle_autour(
-            centre,
-            facteur
-        )

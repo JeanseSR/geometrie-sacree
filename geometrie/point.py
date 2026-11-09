@@ -85,7 +85,6 @@ class Point:
         )
 
     def __sub__(self, autre):
-        from .vecteur import Vecteur
 
         if isinstance(autre, Point):
             return Vecteur(

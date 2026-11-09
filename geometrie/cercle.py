@@ -104,10 +104,3 @@ class Cercle:
             self.centre.x + self.rayon * math.cos(a),
             self.centre.y + self.rayon * math.sin(a)
         )
-
-    def contient(self, point):
-
-        return (
-            self.centre.distance(point)
-            <= self.rayon
-        )

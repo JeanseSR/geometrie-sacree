@@ -52,16 +52,6 @@ class ReseauHexagonalAxial:
         return len(self.points)
 
 
-    # def construire(self):
-
-    #     self.points.clear()
-
-    #     for q, r in self.coordonnees():
-
-    #         self.points.append(
-    #             self.convertir_point(q, r)
-    #         )
-
     def construire(self):
 
         self.points.clear()
@@ -113,48 +103,6 @@ class ReseauHexagonalAxial:
             self.couronnes_points.append(
                 points_couronne
             )
-
-
-    def coordonnees(self):
-        """
-        Génère les coordonnées axiales d'un réseau hexagonal.
-
-        Distance hexagonale :
-            0 -> 1 point
-            1 -> 7 points
-            2 -> 19 points
-            3 -> 37 points
-        """
-
-        yield (0, 0)
-
-        directions = [
-            (1, 0),
-            (1, -1),
-            (0, -1),
-            (-1, 0),
-            (-1, 1),
-            (0, 1),
-        ]
-
-
-        for rayon in range(1, self.couronnes + 1):
-
-            # départ en haut à droite de la couronne
-            q = 0
-            r = -rayon
-
-
-            for dq, dr in directions:
-
-                for _ in range(rayon):
-
-                    yield (q, r)
-
-                    q += dq
-                    r += dr
-                    r += dr
-
 
 
     def convertir_point(
